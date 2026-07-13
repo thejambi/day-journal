@@ -62,7 +62,7 @@ export const app = $state({
 	wordCount: 0,
 	openMenuShown: false,
 	settingsMenuShown: false,
-	modal: null as "shortcuts" | "about" | null,
+	modal: null as "shortcuts" | "about" | "archive" | null,
 });
 
 // --- Non-reactive editor / save machinery ---

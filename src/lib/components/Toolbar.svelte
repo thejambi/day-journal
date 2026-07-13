@@ -54,6 +54,14 @@
 					{/if}
 					{#if app.journalDir}
 						<div class="menu-sep"></div>
+						<button
+							class="menu-item"
+							onclick={() => {
+								closeMenus();
+								app.modal = "archive";
+							}}>Create journal archive…</button
+						>
+						<div class="menu-sep"></div>
 						<button class="menu-item" onclick={forgetCurrentJournal}>Forget current journal</button>
 						<button class="menu-item" onclick={revealJournal}>View journal files</button>
 					{/if}

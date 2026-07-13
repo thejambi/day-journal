@@ -24,7 +24,7 @@ async fn save_note(path: String, contents: String) -> Result<(), String> {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.subsec_nanos())
         .unwrap_or(0);
-    let tmp = dir.join(format!(".psnotes-tmp-{}-{}", std::process::id(), nanos));
+    let tmp = dir.join(format!(".dayjournal-tmp-{}-{}", std::process::id(), nanos));
     let write = (|| -> std::io::Result<()> {
         let mut f = std::fs::File::create(&tmp)?;
         f.write_all(contents.as_bytes())?;
@@ -49,6 +49,68 @@ fn really_quit(app: tauri::AppHandle) {
     let _ = app.save_window_state(StateFlags::all());
     ALLOW_EXIT.store(true, Ordering::SeqCst);
     app.exit(0);
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JournalDay {
+    y: i32,
+    m: u32,
+    d: u32,
+    text: String,
+}
+
+/// Walk the whole journal tree (<root>/YYYY/MM/DD.txt) in one IPC call and
+/// return every entry in chronological order, optionally limited to a year.
+#[tauri::command]
+async fn collect_entries(root: String, year: Option<i32>) -> Result<Vec<JournalDay>, String> {
+    fn numeric_dirs(path: &std::path::Path, digits: usize) -> Vec<(i64, std::path::PathBuf)> {
+        let mut out = Vec::new();
+        if let Ok(rd) = std::fs::read_dir(path) {
+            for entry in rd.flatten() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.len() == digits && name.chars().all(|c| c.is_ascii_digit()) {
+                    if let Ok(n) = name.parse::<i64>() {
+                        if entry.path().is_dir() {
+                            out.push((n, entry.path()));
+                        }
+                    }
+                }
+            }
+        }
+        out.sort_by_key(|(n, _)| *n);
+        out
+    }
+
+    let mut entries = Vec::new();
+    for (y, year_path) in numeric_dirs(std::path::Path::new(&root), 4) {
+        let y = y as i32;
+        if let Some(only) = year {
+            if y != only {
+                continue;
+            }
+        }
+        for (m, month_path) in numeric_dirs(&year_path, 2) {
+            let mut days: Vec<(u32, std::path::PathBuf)> = Vec::new();
+            if let Ok(rd) = std::fs::read_dir(&month_path) {
+                for entry in rd.flatten() {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if name.len() == 6 && name.to_ascii_lowercase().ends_with(".txt") {
+                        if let Ok(d) = name[..2].parse::<u32>() {
+                            days.push((d, entry.path()));
+                        }
+                    }
+                }
+            }
+            days.sort_by_key(|(d, _)| *d);
+            for (d, path) in days {
+                if let Ok(text) = std::fs::read_to_string(&path) {
+                    entries.push(JournalDay { y, m: m as u32, d, text });
+                }
+            }
+        }
+    }
+    Ok(entries)
 }
 
 #[derive(serde::Serialize)]
@@ -135,7 +197,8 @@ pub fn run() {
             save_note,
             really_quit,
             list_notes,
-            search_notes
+            search_notes,
+            collect_entries
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
