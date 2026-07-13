@@ -1,5 +1,15 @@
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
-import { EditorView, keymap, placeholder } from "@codemirror/view";
+import {
+	Decoration,
+	EditorView,
+	MatchDecorator,
+	ViewPlugin,
+	keymap,
+	placeholder,
+	type DecorationSet,
+	type ViewUpdate,
+} from "@codemirror/view";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
@@ -44,6 +54,61 @@ const cmTheme = EditorView.theme({
 		backgroundColor: "var(--sel) !important",
 	},
 	".cm-placeholder": { color: "var(--fg-faint)" },
+	".cm-clickable-url": {
+		color: "var(--accent)",
+		textDecoration: "underline",
+		textUnderlineOffset: "2px",
+		textDecorationColor: "var(--fg-faint)",
+	},
+});
+
+/* --- Clickable URLs (Cmd/Ctrl+click to open; plain click just edits) --- */
+
+const isMacUA = typeof navigator !== "undefined" && navigator.userAgent.includes("Mac");
+// URLs end on a non-punctuation char so a trailing "." or ")" isn't swallowed
+const URL_REGEX = /https?:\/\/[^\s<>()"']*[^\s<>()"'.,;:!?]/g;
+
+const urlMatcher = new MatchDecorator({
+	regexp: URL_REGEX,
+	decoration: Decoration.mark({
+		class: "cm-clickable-url",
+		attributes: { title: (isMacUA ? "⌘" : "Ctrl+") + "click to open" },
+	}),
+});
+
+const urlHighlighter = ViewPlugin.fromClass(
+	class {
+		decorations: DecorationSet;
+		constructor(view: EditorView) {
+			this.decorations = urlMatcher.createDeco(view);
+		}
+		update(update: ViewUpdate) {
+			this.decorations = urlMatcher.updateDeco(update, this.decorations);
+		}
+	},
+	{ decorations: (v) => v.decorations },
+);
+
+const urlClickHandler = EditorView.domEventHandlers({
+	mousedown(e, view) {
+		const mod = isMacUA ? e.metaKey : e.ctrlKey;
+		if (!mod || e.button !== 0) return false;
+		const pos = view.posAtCoords({ x: e.clientX, y: e.clientY });
+		if (pos == null) return false;
+		const line = view.state.doc.lineAt(pos);
+		const re = new RegExp(URL_REGEX.source, "g");
+		let m: RegExpExecArray | null;
+		while ((m = re.exec(line.text))) {
+			const from = line.from + m.index;
+			const to = from + m[0].length;
+			if (pos >= from && pos <= to) {
+				e.preventDefault();
+				void openUrl(m[0]);
+				return true;
+			}
+		}
+		return false;
+	},
 });
 
 const readOnlyCompartment = new Compartment();
@@ -55,6 +120,8 @@ export function buildExtensions(onDocChanged: () => void): Extension[] {
 		syntaxHighlighting(mdHighlight),
 		EditorView.lineWrapping,
 		cmTheme,
+		urlHighlighter,
+		urlClickHandler,
 		placeholder("Write about your day…"),
 		readOnlyCompartment.of([EditorState.readOnly.of(false), EditorView.editable.of(true)]),
 		keymap.of([...defaultKeymap, ...historyKeymap]),
