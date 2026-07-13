@@ -48,7 +48,7 @@ jobs:
       - name: Upload installers
         uses: actions/upload-artifact@v4
         with:
-          name: ps-notes-${{ matrix.platform }}
+          name: day-journal-${{ matrix.platform }}
           if-no-files-found: warn
           path: |
             src-tauri/target/**/bundle/dmg/*.dmg
