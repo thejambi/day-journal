@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from "svelte";
 	import { app, loadEntry, showMonth, goToday } from "$lib/app.svelte";
 	import { today, sameDate } from "$lib/journal";
 
@@ -18,7 +19,12 @@
 		return cells;
 	});
 
-	const now = $derived(today());
+	// Refreshed every minute so the "today" outline moves at midnight
+	let now = $state(today());
+	onMount(() => {
+		const timer = setInterval(() => (now = today()), 60_000);
+		return () => clearInterval(timer);
+	});
 
 	function prevMonth(): void {
 		const m = app.calMonth === 1 ? 12 : app.calMonth - 1;
