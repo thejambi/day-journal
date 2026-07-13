@@ -1,0 +1,69 @@
+/* Global palette and base styles shared by all components */
+
+:root {
+	--bg: #fdfdfc;
+	--bg-panel: #f4f3f1;
+	--fg: #22221f;
+	--fg-dim: #6f6e68;
+	--fg-faint: #b3b1a9;
+	--accent: #2a7ae2;
+	--border: #e2e0db;
+	--sel: #cfe3fb;
+	--hover: #ebeae6;
+	--font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* Dark palette applies when the OS is dark (unless forced light), or when forced dark */
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme="light"]) {
+		--bg: #1e1e1c;
+		--bg-panel: #262624;
+		--fg: #e8e6e1;
+		--fg-dim: #a3a19a;
+		--fg-faint: #62615c;
+		--accent: #6aa5ee;
+		--border: #383734;
+		--sel: #2d4a6d;
+		--hover: #32312e;
+	}
+}
+:root[data-theme="dark"] {
+	--bg: #1e1e1c;
+	--bg-panel: #262624;
+	--fg: #e8e6e1;
+	--fg-dim: #a3a19a;
+	--fg-faint: #62615c;
+	--accent: #6aa5ee;
+	--border: #383734;
+	--sel: #2d4a6d;
+	--hover: #32312e;
+}
+
+html,
+body {
+	margin: 0;
+	height: 100%;
+	overflow: hidden;
+	background: var(--bg);
+	color: var(--fg);
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+
+/* Small toolbar-style button, used across components */
+.tb-btn {
+	font: inherit;
+	font-size: 13px;
+	color: var(--fg);
+	background: transparent;
+	border: 1px solid transparent;
+	border-radius: 6px;
+	padding: 4px 10px;
+	cursor: pointer;
+}
+.tb-btn:hover:not(:disabled) {
+	background: var(--hover);
+}
+.tb-btn:disabled {
+	color: var(--fg-faint);
+	cursor: default;
+}
