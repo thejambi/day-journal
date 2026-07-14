@@ -98,6 +98,53 @@ interface FsEntry {
 	mtimeMs: number;
 }
 
+/* --- Day images: stored beside the entry as DD_1.jpg, DD_2.png, ... --- */
+
+export const IMAGE_EXTS = ["jpg", "jpeg", "png", "gif", "webp", "bmp"];
+
+export function mimeFor(name: string): string {
+	const ext = name.slice(name.lastIndexOf(".") + 1).toLowerCase();
+	if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+	if (ext === "svg") return "image/svg+xml";
+	return "image/" + ext;
+}
+
+export interface DayImageFile {
+	name: string;
+	path: string;
+}
+
+/** Images belonging to a day: files named DD_*.ext in the month folder. */
+export async function listDayImages(root: string, date: EntryDate): Promise<DayImageFile[]> {
+	const { monthDir } = entryPaths(root, date);
+	const prefix = pad2(date.d) + "_";
+	try {
+		const entries = await invoke<FsEntry[]>("list_notes", { dir: monthDir });
+		return entries
+			.filter((e) => {
+				if (e.isDir || !e.name.startsWith(prefix)) return false;
+				const ext = e.name.slice(e.name.lastIndexOf(".") + 1).toLowerCase();
+				return IMAGE_EXTS.includes(ext);
+			})
+			.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+			.map((e) => ({ name: e.name, path: pathJoin(monthDir, e.name) }));
+	} catch {
+		return [];
+	}
+}
+
+/** Next free image path for the day: DD_<n>.<ext> with n = max existing + 1. */
+export async function nextImagePath(root: string, date: EntryDate, ext: string): Promise<string> {
+	const { monthDir } = entryPaths(root, date);
+	const existing = await listDayImages(root, date);
+	let max = 0;
+	for (const img of existing) {
+		const m = /^\d\d_(\d+)\./.exec(img.name);
+		if (m) max = Math.max(max, parseInt(m[1], 10));
+	}
+	return pathJoin(monthDir, `${pad2(date.d)}_${max + 1}${ext}`);
+}
+
 /** Which days of the given month have entries (for calendar marks). */
 export async function daysWithEntries(root: string, y: number, m: number): Promise<number[]> {
 	const monthDir = pathJoin(pathJoin(root, String(y).padStart(4, "0")), pad2(m));

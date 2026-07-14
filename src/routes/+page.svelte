@@ -2,6 +2,7 @@
 	import { onMount } from "svelte";
 	import Toolbar from "$lib/components/Toolbar.svelte";
 	import Calendar from "$lib/components/Calendar.svelte";
+	import DayImages from "$lib/components/DayImages.svelte";
 	import Overlays from "$lib/components/Overlays.svelte";
 	import { persist } from "$lib/settings";
 	import {
@@ -141,6 +142,7 @@
 	<div class="body">
 		<aside class="sidebar" style="width: {app.settings.paneWidth}px">
 			<Calendar />
+			<DayImages />
 		</aside>
 		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 		<div class="divider" role="separator" aria-orientation="vertical" onmousedown={startPaneDrag}></div>

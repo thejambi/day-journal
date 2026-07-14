@@ -3,7 +3,7 @@
  * loading/saving day entries, calendar marks, journals, watching.
  */
 import { open as openFolderDialog } from "@tauri-apps/plugin-dialog";
-import { exists, watch, type UnwatchFn } from "@tauri-apps/plugin-fs";
+import { copyFile, exists, mkdir, readFile, watch, type UnwatchFn } from "@tauri-apps/plugin-fs";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Menu, PredefinedMenuItem } from "@tauri-apps/api/menu";
@@ -23,6 +23,11 @@ import {
 	readEntry,
 	saveEntry,
 	daysWithEntries,
+	listDayImages,
+	nextImagePath,
+	mimeFor,
+	entryPaths,
+	IMAGE_EXTS,
 	type EntryDate,
 } from "./journal";
 import {
@@ -63,6 +68,7 @@ export const app = $state({
 	openMenuShown: false,
 	settingsMenuShown: false,
 	modal: null as "shortcuts" | "about" | "archive" | null,
+	dayImages: [] as { name: string; path: string; url: string }[],
 });
 
 // --- Non-reactive editor / save machinery ---
@@ -139,11 +145,72 @@ export async function loadEntry(date: EntryDate): Promise<void> {
 	dirty = false;
 	isOpening = false;
 	await refreshMarks();
+	void loadDayImages(); // not awaited: keep day switching snappy
 	view.focus();
 }
 
 export async function goToday(): Promise<void> {
 	await loadEntry(today());
+}
+
+// --- Day images (stored beside the entry, fully separate from the text) ---
+
+async function loadDayImages(): Promise<void> {
+	for (const img of app.dayImages) URL.revokeObjectURL(img.url);
+	app.dayImages = [];
+	if (!app.journalDir) return;
+	const date = savedDate;
+	const files = await listDayImages(app.journalDir, date);
+	if (!sameDate(date, savedDate)) return; // switched days during the listing
+	const imgs: { name: string; path: string; url: string }[] = [];
+	for (const f of files) {
+		try {
+			const bytes = await readFile(f.path);
+			imgs.push({ ...f, url: URL.createObjectURL(new Blob([bytes], { type: mimeFor(f.name) })) });
+		} catch (e) {
+			console.error("could not read image", f.path, e);
+		}
+	}
+	if (!sameDate(date, savedDate)) {
+		for (const img of imgs) URL.revokeObjectURL(img.url);
+		return;
+	}
+	app.dayImages = imgs;
+}
+
+/** Add images to the selected day (copies picked files in as DD_n.ext). */
+export async function addImages(): Promise<void> {
+	if (!app.journalDir) return;
+	const picked = await openFolderDialog({
+		multiple: true,
+		title: "Add Images to This Day",
+		filters: [{ name: "Images", extensions: IMAGE_EXTS }],
+	});
+	const files = Array.isArray(picked) ? picked : typeof picked === "string" ? [picked] : [];
+	if (files.length === 0) return;
+	const date = savedDate;
+	const { monthDir } = entryPaths(app.journalDir, date);
+	if (!(await exists(monthDir))) await mkdir(monthDir, { recursive: true });
+	for (const src of files) {
+		const dot = src.lastIndexOf(".");
+		const ext = dot === -1 ? ".jpg" : src.slice(dot).toLowerCase();
+		try {
+			await copyFile(src, await nextImagePath(app.journalDir, date, ext));
+		} catch (e) {
+			console.error("could not copy image", src, e);
+		}
+	}
+	await loadDayImages();
+}
+
+/** Move a day image to the OS trash. */
+export async function removeImage(path: string): Promise<void> {
+	try {
+		await invoke("move_to_trash", { path });
+	} catch (e) {
+		console.error("trash failed", e);
+	}
+	await loadDayImages();
 }
 
 export async function navDays(days: number): Promise<void> {
@@ -233,6 +300,7 @@ async function watchDir(dir: string): Promise<void> {
 
 async function onExternalChange(): Promise<void> {
 	await refreshMarks();
+	void loadDayImages();
 	if (!app.journalDir || dirty || saveTimer) return;
 	const date = { ...savedDate };
 	const text = await readEntry(app.journalDir, date);
