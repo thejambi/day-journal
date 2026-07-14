@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { revealItemInDir, openPath } from "@tauri-apps/plugin-opener";
-	import { app, chooseFolder, modKeyLabel as mod } from "$lib/app.svelte";
+	import { app, chooseFolder, isMac, modKeyLabel as mod } from "$lib/app.svelte";
 	import { journalYears, createArchive, type ArchiveFormat, type ArchiveResult } from "$lib/archive";
 
 	let archiveFormat = $state<ArchiveFormat>("html");
@@ -42,6 +42,12 @@
 		[`${mod}U`, "Unlock entry"],
 		[`${mod}O`, "Choose journal folder"],
 		[`${mod}=  /  ${mod}-  /  ${mod}0`, "Font size bigger / smaller / reset"],
+		["Tab / Shift+Tab", "Indent / unindent (list items indent whole bullet)"],
+		[`${mod}]  /  ${mod}[`, "Indent / unindent line"],
+		["Enter (in a list)", "Continue the list; Enter on an empty item ends it"],
+		[`${mod}B  /  ${isMac ? "⌘⇧I" : "Ctrl+Shift+I"}`, "Bold / italics"],
+		[`${mod}1–6  /  ${mod}\\`, "Set / increase heading level"],
+		[isMac ? "⌘⇧K" : "Ctrl+Shift+K", "Toggle HTML comment around selection"],
 	];
 </script>
 
