@@ -60,6 +60,7 @@ const cmTheme = EditorView.theme({
 		textUnderlineOffset: "2px",
 		textDecorationColor: "var(--fg-faint)",
 	},
+	"&.cm-mod-down .cm-clickable-url": { cursor: "pointer" },
 });
 
 /* --- Clickable URLs (Cmd/Ctrl+click to open; plain click just edits) --- */
@@ -87,6 +88,33 @@ const urlHighlighter = ViewPlugin.fromClass(
 		}
 	},
 	{ decorations: (v) => v.decorations },
+);
+
+/* Show the pointer hand over clickables while the mod key is held */
+const modKeyCursor = ViewPlugin.fromClass(
+	class {
+		private setDown: (e: KeyboardEvent) => void;
+		private setUp: (e: KeyboardEvent) => void;
+		private clear: () => void;
+		constructor(view: EditorView) {
+			const modKey = isMacUA ? "Meta" : "Control";
+			this.setDown = (e) => {
+				if (e.key === modKey) view.dom.classList.add("cm-mod-down");
+			};
+			this.setUp = (e) => {
+				if (e.key === modKey) view.dom.classList.remove("cm-mod-down");
+			};
+			this.clear = () => view.dom.classList.remove("cm-mod-down");
+			window.addEventListener("keydown", this.setDown);
+			window.addEventListener("keyup", this.setUp);
+			window.addEventListener("blur", this.clear);
+		}
+		destroy() {
+			window.removeEventListener("keydown", this.setDown);
+			window.removeEventListener("keyup", this.setUp);
+			window.removeEventListener("blur", this.clear);
+		}
+	},
 );
 
 const urlClickHandler = EditorView.domEventHandlers({
@@ -121,6 +149,7 @@ export function buildExtensions(onDocChanged: () => void): Extension[] {
 		EditorView.lineWrapping,
 		cmTheme,
 		urlHighlighter,
+		modKeyCursor,
 		urlClickHandler,
 		placeholder("Write about your day…"),
 		readOnlyCompartment.of([EditorState.readOnly.of(false), EditorView.editable.of(true)]),
