@@ -58,10 +58,14 @@ struct JournalDay {
     m: u32,
     d: u32,
     text: String,
+    images: Vec<String>,
 }
 
-/// Walk the whole journal tree (<root>/YYYY/MM/DD.txt) in one IPC call and
-/// return every entry in chronological order, optionally limited to a year.
+const IMAGE_EXTS: [&str; 6] = ["jpg", "jpeg", "png", "gif", "webp", "bmp"];
+
+/// Walk the whole journal tree (<root>/YYYY/MM/DD.txt plus DD_*.jpg images)
+/// in one IPC call and return every day in chronological order, optionally
+/// limited to a year. Days with only images (no text) are included.
 #[tauri::command]
 async fn collect_entries(root: String, year: Option<i32>) -> Result<Vec<JournalDay>, String> {
     fn numeric_dirs(path: &std::path::Path, digits: usize) -> Vec<(i64, std::path::PathBuf)> {
@@ -91,22 +95,42 @@ async fn collect_entries(root: String, year: Option<i32>) -> Result<Vec<JournalD
             }
         }
         for (m, month_path) in numeric_dirs(&year_path, 2) {
-            let mut days: Vec<(u32, std::path::PathBuf)> = Vec::new();
+            use std::collections::BTreeMap;
+            let mut days: BTreeMap<u32, (Option<std::path::PathBuf>, Vec<String>)> = BTreeMap::new();
             if let Ok(rd) = std::fs::read_dir(&month_path) {
                 for entry in rd.flatten() {
                     let name = entry.file_name().to_string_lossy().to_string();
                     if name.len() == 6 && name.to_ascii_lowercase().ends_with(".txt") {
                         if let Ok(d) = name[..2].parse::<u32>() {
-                            days.push((d, entry.path()));
+                            days.entry(d).or_default().0 = Some(entry.path());
+                        }
+                    } else if name.len() > 3 && name.as_bytes()[2] == b'_' {
+                        // DD_*.ext day image
+                        let ext_ok = name
+                            .rsplit('.')
+                            .next()
+                            .map(|e| IMAGE_EXTS.contains(&e.to_ascii_lowercase().as_str()))
+                            .unwrap_or(false);
+                        if ext_ok {
+                            if let Ok(d) = name[..2].parse::<u32>() {
+                                days.entry(d)
+                                    .or_default()
+                                    .1
+                                    .push(entry.path().to_string_lossy().to_string());
+                            }
                         }
                     }
                 }
             }
-            days.sort_by_key(|(d, _)| *d);
-            for (d, path) in days {
-                if let Ok(text) = std::fs::read_to_string(&path) {
-                    entries.push(JournalDay { y, m: m as u32, d, text });
+            for (d, (text_path, mut images)) in days {
+                images.sort();
+                let text = text_path
+                    .and_then(|p| std::fs::read_to_string(&p).ok())
+                    .unwrap_or_default();
+                if text.is_empty() && images.is_empty() {
+                    continue;
                 }
+                entries.push(JournalDay { y, m: m as u32, d, text, images });
             }
         }
     }

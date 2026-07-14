@@ -6,6 +6,7 @@ import { open as openFolderDialog } from "@tauri-apps/plugin-dialog";
 import { copyFile, exists, mkdir, readFile, watch, type UnwatchFn } from "@tauri-apps/plugin-fs";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { Menu, PredefinedMenuItem } from "@tauri-apps/api/menu";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
@@ -69,6 +70,7 @@ export const app = $state({
 	settingsMenuShown: false,
 	modal: null as "shortcuts" | "about" | "archive" | null,
 	dayImages: [] as { name: string; path: string; url: string }[],
+	dropHover: false,
 });
 
 // --- Non-reactive editor / save machinery ---
@@ -178,20 +180,18 @@ async function loadDayImages(): Promise<void> {
 	app.dayImages = imgs;
 }
 
-/** Add images to the selected day (copies picked files in as DD_n.ext). */
-export async function addImages(): Promise<void> {
-	if (!app.journalDir) return;
-	const picked = await openFolderDialog({
-		multiple: true,
-		title: "Add Images to This Day",
-		filters: [{ name: "Images", extensions: IMAGE_EXTS }],
-	});
-	const files = Array.isArray(picked) ? picked : typeof picked === "string" ? [picked] : [];
-	if (files.length === 0) return;
+function isImagePath(path: string): boolean {
+	const ext = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
+	return IMAGE_EXTS.includes(ext);
+}
+
+/** Copy image files into the selected day as DD_n.ext. */
+export async function addImageFiles(paths: string[]): Promise<void> {
+	if (!app.journalDir || paths.length === 0) return;
 	const date = savedDate;
 	const { monthDir } = entryPaths(app.journalDir, date);
 	if (!(await exists(monthDir))) await mkdir(monthDir, { recursive: true });
-	for (const src of files) {
+	for (const src of paths) {
 		const dot = src.lastIndexOf(".");
 		const ext = dot === -1 ? ".jpg" : src.slice(dot).toLowerCase();
 		try {
@@ -201,6 +201,18 @@ export async function addImages(): Promise<void> {
 		}
 	}
 	await loadDayImages();
+}
+
+/** Add images to the selected day via the file picker. */
+export async function addImages(): Promise<void> {
+	if (!app.journalDir) return;
+	const picked = await openFolderDialog({
+		multiple: true,
+		title: "Add Images to This Day",
+		filters: [{ name: "Images", extensions: IMAGE_EXTS }],
+	});
+	const files = Array.isArray(picked) ? picked : typeof picked === "string" ? [picked] : [];
+	await addImageFiles(files);
 }
 
 /** Move a day image to the OS trash. */
@@ -353,6 +365,7 @@ export function closeMenus(): void {
 export function initApp(editorParentEl: HTMLElement): () => void {
 	let unlistenClose: (() => void) | undefined;
 	let unlistenExit: (() => void) | undefined;
+	let unlistenDrop: (() => void) | undefined;
 
 	void (async () => {
 		app.settings = { ...app.settings, ...(await initSettings()) };
@@ -381,6 +394,20 @@ export function initApp(editorParentEl: HTMLElement): () => void {
 			await flushSave();
 			await invoke("really_quit");
 		});
+
+		// Dropping image files anywhere on the window adds them to the day
+		unlistenDrop = await getCurrentWebview().onDragDropEvent((event) => {
+			const payload = event.payload;
+			if (payload.type === "enter") {
+				app.dropHover = payload.paths.some(isImagePath);
+			} else if (payload.type === "leave") {
+				app.dropHover = false;
+			} else if (payload.type === "drop") {
+				app.dropHover = false;
+				const images = payload.paths.filter(isImagePath);
+				if (images.length > 0) void addImageFiles(images);
+			}
+		});
 	})();
 
 	const flushOnBlur = () => void flushSave();
@@ -390,6 +417,7 @@ export function initApp(editorParentEl: HTMLElement): () => void {
 		window.removeEventListener("blur", flushOnBlur);
 		unlistenClose?.();
 		unlistenExit?.();
+		unlistenDrop?.();
 		if (unwatch) unwatch();
 		view?.destroy();
 	};

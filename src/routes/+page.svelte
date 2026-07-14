@@ -5,6 +5,7 @@
 	import DayImages from "$lib/components/DayImages.svelte";
 	import Overlays from "$lib/components/Overlays.svelte";
 	import { persist } from "$lib/settings";
+	import { dateHeading } from "$lib/journal";
 	import {
 		app,
 		isMac,
@@ -150,6 +151,12 @@
 		<div class="editor-wrap" class:locked={app.locked} style="font-size: {app.settings.fontSize}px" bind:this={editorParent}></div>
 	</div>
 
+	{#if app.dropHover}
+		<div class="drop-hint">
+			<div class="drop-box">Drop images to add to {dateHeading(app.selected)}</div>
+		</div>
+	{/if}
+
 	<Overlays />
 </main>
 
@@ -190,6 +197,26 @@
 	}
 	.editor-wrap.locked {
 		background: var(--bg-panel);
+	}
+
+	.drop-hint {
+		position: fixed;
+		inset: 0;
+		z-index: 150;
+		pointer-events: none;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: color-mix(in srgb, var(--accent) 12%, transparent);
+	}
+	.drop-box {
+		font-size: 15px;
+		font-weight: 600;
+		color: var(--fg);
+		background: var(--bg);
+		border: 2px dashed var(--accent);
+		border-radius: 12px;
+		padding: 18px 28px;
 	}
 	.editor-wrap :global(.cm-editor) {
 		height: 100%;

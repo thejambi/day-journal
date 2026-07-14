@@ -5,14 +5,16 @@
  * the browser gives a clean PDF for free.
  */
 import { invoke } from "@tauri-apps/api/core";
-import { exists, mkdir } from "@tauri-apps/plugin-fs";
+import { exists, mkdir, readFile } from "@tauri-apps/plugin-fs";
 import { pathJoin, baseName } from "./paths";
+import { mimeFor } from "./journal";
 
 export interface JournalDay {
 	y: number;
 	m: number;
 	d: number;
 	text: string;
+	images: string[]; // full paths of the day's image files
 }
 
 export type ArchiveFormat = "html" | "txt";
@@ -56,7 +58,16 @@ function escapeHtml(s: string): string {
 	return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-export function buildHtml(entries: JournalDay[], journalName: string, scope: string): string {
+function toDataUri(bytes: Uint8Array, mime: string): string {
+	let bin = "";
+	const chunk = 0x8000;
+	for (let i = 0; i < bytes.length; i += chunk) {
+		bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
+	}
+	return `data:${mime};base64,` + btoa(bin);
+}
+
+export async function buildHtml(entries: JournalDay[], journalName: string, scope: string): Promise<string> {
 	const created = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 	let body = "";
 	let curYear = 0;
@@ -71,7 +82,26 @@ export function buildHtml(entries: JournalDay[], journalName: string, scope: str
 			curMonth = e.m;
 			body += `<h2 class="month">${MONTHS[e.m - 1]} ${e.y}</h2>\n`;
 		}
-		body += `<article class="entry">\n<h3 class="date">${longDate(e)}</h3>\n<div class="text">${escapeHtml(e.text.trim())}</div>\n</article>\n`;
+		// Embed the day's images as data URIs: the archive stays one
+		// fully self-contained file, photos included
+		let imagesHtml = "";
+		for (const imgPath of e.images) {
+			try {
+				const bytes = await readFile(imgPath);
+				const name = imgPath.split(/[\\/]/).pop() ?? imgPath;
+				imagesHtml += `<img src="${toDataUri(bytes, mimeFor(name))}" alt="${escapeHtml(name)}"/>\n`;
+			} catch {
+				// unreadable image; skip it
+			}
+		}
+		body += `<article class="entry">\n<h3 class="date">${longDate(e)}</h3>\n`;
+		if (e.text.trim() !== "") {
+			body += `<div class="text">${escapeHtml(e.text.trim())}</div>\n`;
+		}
+		if (imagesHtml) {
+			body += `<div class="images">\n${imagesHtml}</div>\n`;
+		}
+		body += `</article>\n`;
 	}
 	return `<!doctype html>
 <html lang="en">
@@ -115,6 +145,8 @@ export function buildHtml(entries: JournalDay[], journalName: string, scope: str
 		margin: 0 0 0.7em;
 	}
 	.text { white-space: pre-wrap; }
+	.images { display: flex; flex-wrap: wrap; gap: 0.7em; margin-top: 0.9em; }
+	.images img { max-width: 47%; max-height: 26em; border-radius: 4px; object-fit: contain; }
 	@media print {
 		body { padding: 0; max-width: none; font-size: 11pt; }
 		h1.year { break-before: page; }
@@ -145,6 +177,10 @@ export function buildText(entries: JournalDay[]): string {
 		out += dateString + "\n";
 		out += "-".repeat(dateString.length) + "\n\n";
 		out += e.text.trim() + "\n";
+		if (e.images.length > 0) {
+			const names = e.images.map((p) => p.split(/[\\/]/).pop()).join(", ");
+			out += `\n[Images: ${names}]\n`;
+		}
 	}
 	return out.trimStart();
 }
@@ -162,7 +198,7 @@ export async function createArchive(root: string, format: ArchiveFormat, year?: 
 	const journalName = baseName(root);
 	const scope = year ? String(year) : `${entries[0].y}–${entries[entries.length - 1].y}`;
 	const contents =
-		format === "html" ? buildHtml(entries, journalName, scope) : buildText(entries);
+		format === "html" ? await buildHtml(entries, journalName, scope) : buildText(entries);
 
 	const archiveDir = pathJoin(root, "Archive");
 	if (!(await exists(archiveDir))) await mkdir(archiveDir);
