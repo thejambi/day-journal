@@ -58,6 +58,113 @@ function escapeHtml(s: string): string {
 	return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+/* --- Journal-focused markdown -> HTML for archive rendering --- */
+
+function inlineMd(s: string): string {
+	const stash: string[] = [];
+	let out = escapeHtml(s);
+	// markdown links first, stashed so autolinking can't double-process them
+	out = out.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, t: string, u: string) => {
+		stash.push(`<a href="${u}">${t}</a>`);
+		return `\x00${stash.length - 1}\x00`;
+	});
+	out = out.replace(/https?:\/\/[^\s<>()"']*[^\s<>()"'.,;:!?]/g, (u) => {
+		stash.push(`<a href="${u}">${u}</a>`);
+		return `\x00${stash.length - 1}\x00`;
+	});
+	out = out
+		.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+		.replace(/\*([^*]+)\*/g, "<em>$1</em>")
+		.replace(/`([^`]+)`/g, "<code>$1</code>");
+	return out.replace(/\x00(\d+)\x00/g, (_, i: string) => stash[+i]);
+}
+
+interface ListItem {
+	depth: number;
+	ordered: boolean;
+	text: string;
+}
+
+function renderList(items: ListItem[]): string {
+	let html = "";
+	const stack: string[] = [];
+	for (const it of items) {
+		while (stack.length - 1 < it.depth) {
+			const tag = it.ordered ? "ol" : "ul";
+			html += `<${tag}>`;
+			stack.push(tag);
+		}
+		while (stack.length - 1 > it.depth) html += `</${stack.pop()}>`;
+		html += `<li>${inlineMd(it.text)}</li>`;
+	}
+	while (stack.length > 0) html += `</${stack.pop()}>`;
+	return html + "\n";
+}
+
+const LI_RE = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/;
+
+export function mdToHtml(md: string): string {
+	const lines = md.split("\n");
+	let html = "";
+	let i = 0;
+	let para: string[] = [];
+	const flushPara = () => {
+		if (para.length > 0) {
+			html += `<p>${para.map(inlineMd).join("<br/>")}</p>\n`;
+			para = [];
+		}
+	};
+	while (i < lines.length) {
+		const line = lines[i];
+		const t = line.trim();
+		if (t === "") {
+			flushPara();
+			i++;
+			continue;
+		}
+		const h = /^(#{1,6})\s+(.*)$/.exec(t);
+		if (h) {
+			flushPara();
+			const level = h[1].length;
+			html += `<h${level}>${inlineMd(h[2])}</h${level}>\n`;
+			i++;
+			continue;
+		}
+		if (/^(-{3,}|\*{3,}|_{3,})$/.test(t)) {
+			flushPara();
+			html += "<hr/>\n";
+			i++;
+			continue;
+		}
+		if (t.startsWith(">")) {
+			flushPara();
+			const quote: string[] = [];
+			while (i < lines.length && lines[i].trim().startsWith(">")) {
+				quote.push(lines[i].trim().replace(/^>\s?/, ""));
+				i++;
+			}
+			html += `<blockquote>\n${mdToHtml(quote.join("\n"))}</blockquote>\n`;
+			continue;
+		}
+		if (LI_RE.test(line)) {
+			flushPara();
+			const items: ListItem[] = [];
+			let m: RegExpExecArray | null;
+			while (i < lines.length && (m = LI_RE.exec(lines[i]))) {
+				const indent = m[1].replace(/\t/g, "  ").length;
+				items.push({ depth: Math.floor(indent / 2), ordered: /^\d/.test(m[2]), text: m[3] });
+				i++;
+			}
+			html += renderList(items);
+			continue;
+		}
+		para.push(t);
+		i++;
+	}
+	flushPara();
+	return html;
+}
+
 function toDataUri(bytes: Uint8Array, mime: string): string {
 	let bin = "";
 	const chunk = 0x8000;
@@ -96,7 +203,7 @@ export async function buildHtml(entries: JournalDay[], journalName: string, scop
 		}
 		body += `<article class="entry">\n<h3 class="date">${longDate(e)}</h3>\n`;
 		if (e.text.trim() !== "") {
-			body += `<div class="text">${escapeHtml(e.text.trim())}</div>\n`;
+			body += `<div class="text">${mdToHtml(e.text.trim())}</div>\n`;
 		}
 		if (imagesHtml) {
 			body += `<div class="images">\n${imagesHtml}</div>\n`;
@@ -144,7 +251,14 @@ export async function buildHtml(entries: JournalDay[], journalName: string, scop
 		padding-bottom: 0.3em;
 		margin: 0 0 0.7em;
 	}
-	.text { white-space: pre-wrap; }
+	.text p { margin: 0 0 0.75em; }
+	.text ul, .text ol { margin: 0 0 0.75em; padding-left: 1.7em; }
+	.text blockquote { margin: 0 0 0.75em; padding: 0.1em 0 0.1em 1em; border-left: 3px solid #d5d2c8; color: #555; }
+	.text blockquote p:last-child { margin-bottom: 0; }
+	.text code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.88em; background: #f1efe9; padding: 0 4px; border-radius: 3px; }
+	.text a { color: #2a6fb0; }
+	.text hr { border: none; border-top: 1px solid #ddd; margin: 1em 0; }
+	.text h1, .text h2, .text h3, .text h4, .text h5, .text h6 { font-size: 1.12em; margin: 0.9em 0 0.45em; }
 	.images { display: flex; flex-wrap: wrap; gap: 0.7em; margin-top: 0.9em; }
 	.images img { max-width: 47%; max-height: 26em; border-radius: 4px; object-fit: contain; }
 	@media print {
