@@ -201,6 +201,7 @@ export async function addImageFiles(paths: string[]): Promise<void> {
 		}
 	}
 	await loadDayImages();
+	await refreshMarks(); // image-only days get a calendar dot too
 }
 
 /** Add images to the selected day via the file picker. */
@@ -223,6 +224,7 @@ export async function removeImage(path: string): Promise<void> {
 		console.error("trash failed", e);
 	}
 	await loadDayImages();
+	await refreshMarks();
 }
 
 export async function navDays(days: number): Promise<void> {

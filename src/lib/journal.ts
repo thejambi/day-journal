@@ -145,15 +145,22 @@ export async function nextImagePath(root: string, date: EntryDate, ext: string):
 	return pathJoin(monthDir, `${pad2(date.d)}_${max + 1}${ext}`);
 }
 
-/** Which days of the given month have entries (for calendar marks). */
+/** Which days of the given month have entries or images (for calendar marks). */
 export async function daysWithEntries(root: string, y: number, m: number): Promise<number[]> {
 	const monthDir = pathJoin(pathJoin(root, String(y).padStart(4, "0")), pad2(m));
 	try {
 		const entries = await invoke<FsEntry[]>("list_notes", { dir: monthDir });
-		return entries
-			.filter((e) => !e.isDir && /^\d\d\.txt$/i.test(e.name))
-			.map((e) => parseInt(e.name.slice(0, 2), 10))
-			.filter((d) => d >= 1 && d <= 31);
+		const days = new Set<number>();
+		for (const e of entries) {
+			if (e.isDir) continue;
+			if (/^\d\d\.txt$/i.test(e.name)) {
+				days.add(parseInt(e.name.slice(0, 2), 10));
+			} else if (/^\d\d_/.test(e.name)) {
+				const ext = e.name.slice(e.name.lastIndexOf(".") + 1).toLowerCase();
+				if (IMAGE_EXTS.includes(ext)) days.add(parseInt(e.name.slice(0, 2), 10));
+			}
+		}
+		return [...days].filter((d) => d >= 1 && d <= 31);
 	} catch {
 		return []; // month folder doesn't exist
 	}
