@@ -4,6 +4,7 @@
  * <journal>/Archive/. The HTML has real print CSS, so "print to PDF" from
  * the browser gives a clean PDF for free.
  */
+import { Marked, type Tokens } from "marked";
 import { invoke } from "@tauri-apps/api/core";
 import { exists, mkdir, readFile } from "@tauri-apps/plugin-fs";
 import { pathJoin, baseName } from "./paths";
@@ -58,124 +59,20 @@ function escapeHtml(s: string): string {
 	return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-/* --- Journal-focused markdown -> HTML for archive rendering --- */
+/* Markdown -> HTML via marked (CommonMark + GFM: tables, task lists, etc).
+   Raw HTML in entries is escaped, never injected — archives should show
+   what was typed, not execute it. */
+const md = new Marked({ gfm: true, breaks: true });
+md.use({
+	renderer: {
+		html(token: Tokens.HTML | Tokens.Tag): string {
+			return escapeHtml(token.raw);
+		},
+	},
+});
 
-function inlineMd(s: string): string {
-	const stash: string[] = [];
-	let out = escapeHtml(s);
-	// markdown links first, stashed so autolinking can't double-process them
-	out = out.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, t: string, u: string) => {
-		stash.push(`<a href="${u}">${t}</a>`);
-		return `\x00${stash.length - 1}\x00`;
-	});
-	out = out.replace(/https?:\/\/[^\s<>()"']*[^\s<>()"'.,;:!?]/g, (u) => {
-		stash.push(`<a href="${u}">${u}</a>`);
-		return `\x00${stash.length - 1}\x00`;
-	});
-	out = out
-		.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-		.replace(/\*([^*]+)\*/g, "<em>$1</em>")
-		.replace(/`([^`]+)`/g, "<code>$1</code>");
-	return out.replace(/\x00(\d+)\x00/g, (_, i: string) => stash[+i]);
-}
-
-interface ListItem {
-	depth: number;
-	ordered: boolean;
-	text: string;
-}
-
-function renderList(items: ListItem[]): string {
-	let html = "";
-	const stack: string[] = [];
-	for (const it of items) {
-		while (stack.length - 1 < it.depth) {
-			const tag = it.ordered ? "ol" : "ul";
-			html += `<${tag}>`;
-			stack.push(tag);
-		}
-		while (stack.length - 1 > it.depth) html += `</${stack.pop()}>`;
-		html += `<li>${inlineMd(it.text)}</li>`;
-	}
-	while (stack.length > 0) html += `</${stack.pop()}>`;
-	return html + "\n";
-}
-
-const LI_RE = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/;
-
-export function mdToHtml(md: string): string {
-	const lines = md.split("\n");
-	let html = "";
-	let i = 0;
-	let para: string[] = [];
-	const flushPara = () => {
-		if (para.length > 0) {
-			html += `<p>${para.map(inlineMd).join("<br/>")}</p>\n`;
-			para = [];
-		}
-	};
-	while (i < lines.length) {
-		const line = lines[i];
-		const t = line.trim();
-		if (t === "") {
-			flushPara();
-			i++;
-			continue;
-		}
-		if (t.startsWith("```")) {
-			// Fenced code block: verbatim, whitespace preserved exactly
-			flushPara();
-			i++;
-			const code: string[] = [];
-			while (i < lines.length && !lines[i].trim().startsWith("```")) {
-				code.push(lines[i]);
-				i++;
-			}
-			i++; // skip the closing fence
-			html += `<pre><code>${escapeHtml(code.join("\n"))}</code></pre>\n`;
-			continue;
-		}
-		const h = /^(#{1,6})\s+(.*)$/.exec(t);
-		if (h) {
-			flushPara();
-			const level = h[1].length;
-			html += `<h${level}>${inlineMd(h[2])}</h${level}>\n`;
-			i++;
-			continue;
-		}
-		if (/^(-{3,}|\*{3,}|_{3,})$/.test(t)) {
-			flushPara();
-			html += "<hr/>\n";
-			i++;
-			continue;
-		}
-		if (t.startsWith(">")) {
-			flushPara();
-			const quote: string[] = [];
-			while (i < lines.length && lines[i].trim().startsWith(">")) {
-				quote.push(lines[i].trim().replace(/^>\s?/, ""));
-				i++;
-			}
-			html += `<blockquote>\n${mdToHtml(quote.join("\n"))}</blockquote>\n`;
-			continue;
-		}
-		if (LI_RE.test(line)) {
-			flushPara();
-			const items: ListItem[] = [];
-			let m: RegExpExecArray | null;
-			while (i < lines.length && (m = LI_RE.exec(lines[i]))) {
-				const indent = m[1].replace(/\t/g, "  ").length;
-				items.push({ depth: Math.floor(indent / 2), ordered: /^\d/.test(m[2]), text: m[3] });
-				i++;
-			}
-			html += renderList(items);
-			continue;
-		}
-		para.push(t);
-		i++;
-	}
-	flushPara();
-	return html;
+export function mdToHtml(src: string): string {
+	return md.parse(src) as string;
 }
 
 function toDataUri(bytes: Uint8Array, mime: string): string {
@@ -271,6 +168,11 @@ export async function buildHtml(entries: JournalDay[], journalName: string, scop
 	.text code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.88em; background: #f1efe9; padding: 0 4px; border-radius: 3px; }
 	.text pre { background: #f6f4ee; border: 1px solid #e4e1d8; border-radius: 6px; padding: 0.7em 0.9em; margin: 0 0 0.75em; overflow-x: auto; line-height: 1.45; }
 	.text pre code { background: none; padding: 0; font-size: 0.82em; white-space: pre; }
+	.text table { border-collapse: collapse; margin: 0 0 0.75em; }
+	.text th, .text td { border: 1px solid #d5d2c8; padding: 0.25em 0.7em; }
+	.text th { background: #f1efe9; }
+	.text input[type="checkbox"] { margin-right: 0.4em; }
+	.text del { color: #8a8578; }
 	.text a { color: #2a6fb0; }
 	.text hr { border: none; border-top: 1px solid #ddd; margin: 1em 0; }
 	.text h1, .text h2, .text h3, .text h4, .text h5, .text h6 { font-size: 1.12em; margin: 0.9em 0 0.45em; }
