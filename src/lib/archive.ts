@@ -122,6 +122,19 @@ export function mdToHtml(md: string): string {
 			i++;
 			continue;
 		}
+		if (t.startsWith("```")) {
+			// Fenced code block: verbatim, whitespace preserved exactly
+			flushPara();
+			i++;
+			const code: string[] = [];
+			while (i < lines.length && !lines[i].trim().startsWith("```")) {
+				code.push(lines[i]);
+				i++;
+			}
+			i++; // skip the closing fence
+			html += `<pre><code>${escapeHtml(code.join("\n"))}</code></pre>\n`;
+			continue;
+		}
 		const h = /^(#{1,6})\s+(.*)$/.exec(t);
 		if (h) {
 			flushPara();
@@ -256,6 +269,8 @@ export async function buildHtml(entries: JournalDay[], journalName: string, scop
 	.text blockquote { margin: 0 0 0.75em; padding: 0.1em 0 0.1em 1em; border-left: 3px solid #d5d2c8; color: #555; }
 	.text blockquote p:last-child { margin-bottom: 0; }
 	.text code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.88em; background: #f1efe9; padding: 0 4px; border-radius: 3px; }
+	.text pre { background: #f6f4ee; border: 1px solid #e4e1d8; border-radius: 6px; padding: 0.7em 0.9em; margin: 0 0 0.75em; overflow-x: auto; line-height: 1.45; }
+	.text pre code { background: none; padding: 0; font-size: 0.82em; white-space: pre; }
 	.text a { color: #2a6fb0; }
 	.text hr { border: none; border-top: 1px solid #ddd; margin: 1em 0; }
 	.text h1, .text h2, .text h3, .text h4, .text h5, .text h6 { font-size: 1.12em; margin: 0.9em 0 0.45em; }
