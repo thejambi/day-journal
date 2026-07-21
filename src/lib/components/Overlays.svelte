@@ -45,9 +45,17 @@
 		["Tab / Shift+Tab", "Indent / unindent (list items indent whole bullet)"],
 		[`${mod}]  /  ${mod}[`, "Indent / unindent line"],
 		["Enter (in a list)", "Continue the list; Enter on an empty item ends it"],
-		[`${mod}B  /  ${isMac ? "⌘⇧I" : "Ctrl+Shift+I"}`, "Bold / italics"],
+		[
+			`${mod}B  /  ${isMac ? "⌘⇧I" : "Ctrl+Shift+I"}  /  ${isMac ? "⌥⌘U" : "Ctrl+Alt+U"}`,
+			"Bold / italics / strikethrough",
+		],
+		[isMac ? "⌘⇧K" : "Ctrl+Shift+K", "Add link"],
+		[`${isMac ? "⌥⌘J" : "Ctrl+Alt+J"}  /  ${isMac ? "⌥⇧⌘J" : "Ctrl+Alt+Shift+J"}`, "Inline code / code block"],
+		[`${isMac ? "⌥⌘L" : "Ctrl+Alt+L"}  /  ${isMac ? "⌥⇧⌘L" : "Ctrl+Alt+Shift+L"}`, "Bullet / ordered list"],
+		[`${isMac ? "⌥⌘T" : "Ctrl+Alt+T"}  /  ${isMac ? "⌥⌘X" : "Ctrl+Alt+X"}`, "Task list / toggle task done"],
+		[isMac ? "⌘>" : "Ctrl+>", "Blockquote"],
 		[`${mod}1–6  /  ${mod}\\`, "Set / increase heading level"],
-		[isMac ? "⌘⇧K" : "Ctrl+Shift+K", "Toggle HTML comment around selection"],
+		[`${mod}/`, "Toggle HTML comment around selection"],
 	];
 </script>
 

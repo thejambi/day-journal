@@ -124,12 +124,22 @@ export function adjustHeading(view: EditorView, delta: number): boolean {
 	return setHeading(view, level);
 }
 
-// Mod-I and Mod-K are journal week navigation, so italics and comment
-// live on the shifted variants here.
+// Mod+L/J/K/I are day and week navigation here, so the formatting
+// commands that collide with them live on Alt (or shifted) variants.
 const mdKeymap = [
 	{ key: "Mod-b", run: (v: EditorView) => toggleSurround(v, "**") },
 	{ key: "Mod-Shift-i", run: (v: EditorView) => toggleSurround(v, "*") },
-	{ key: "Mod-Shift-k", run: (v: EditorView) => toggleSurroundWith(v, "<!-- ", " -->") },
+	{ key: "Mod-Alt-u", run: (v: EditorView) => toggleSurround(v, "~~") },
+	{ key: "Mod-Shift-k", run: insertLink },
+	{ key: "Mod-/", run: (v: EditorView) => toggleSurroundWith(v, "<!-- ", " -->") },
+	{ key: "Mod-Alt-j", run: (v: EditorView) => toggleSurround(v, "`") },
+	{ key: "Mod-Alt-Shift-j", run: insertCodeBlock },
+	{ key: "Mod-Alt-l", run: (v: EditorView) => toggleList(v, "bullet") },
+	{ key: "Mod-Alt-Shift-l", run: (v: EditorView) => toggleList(v, "ordered") },
+	{ key: "Mod-Alt-t", run: (v: EditorView) => toggleList(v, "task") },
+	{ key: "Mod-Alt-x", run: toggleTaskDone },
+	{ key: "Mod-Shift-.", run: toggleBlockquote },
+	{ key: "Mod->", run: toggleBlockquote },
 	...[1, 2, 3, 4, 5, 6].map((n) => ({
 		key: `Mod-${n}`,
 		run: (v: EditorView) => setHeading(v, n),
@@ -137,6 +147,131 @@ const mdKeymap = [
 	{ key: "Mod-\\", run: (v: EditorView) => adjustHeading(v, 1) },
 	{ key: "Mod-Shift-\\", run: (v: EditorView) => adjustHeading(v, -1) },
 ];
+
+/* --- Line-prefix commands: lists, tasks, blockquote --- */
+
+const BULLET_RE = /^(\s*)([-*+])\s+/;
+const ORDERED_RE = /^(\s*)(\d+[.)])\s+/;
+const TASK_RE = /^(\s*)([-*+])\s+\[([ xX])\]\s+/;
+const QUOTE_RE = /^(\s*)>\s?/;
+
+/** Every line touched by the selection (deduped, in order). */
+function selectedLines(state: EditorState) {
+	const lines = [];
+	const seen = new Set<number>();
+	for (const range of state.selection.ranges) {
+		const last = state.doc.lineAt(range.to).number;
+		for (let n = state.doc.lineAt(range.from).number; n <= last; n++) {
+			if (!seen.has(n)) {
+				seen.add(n);
+				lines.push(state.doc.line(n));
+			}
+		}
+	}
+	return lines;
+}
+
+/** Split a line into its indent and its content, dropping any list marker. */
+function stripMarker(text: string): { indent: string; body: string } {
+	const m = TASK_RE.exec(text) ?? BULLET_RE.exec(text) ?? ORDERED_RE.exec(text);
+	if (m) return { indent: m[1], body: text.slice(m[0].length) };
+	const indent = /^(\s*)/.exec(text)?.[1] ?? "";
+	return { indent, body: text.slice(indent.length) };
+}
+
+export function toggleList(view: EditorView, kind: "bullet" | "ordered" | "task"): boolean {
+	const lines = selectedLines(view.state);
+	if (lines.length === 0) return false;
+	const has = (t: string) =>
+		kind === "bullet"
+			? BULLET_RE.test(t) && !TASK_RE.test(t)
+			: kind === "ordered"
+				? ORDERED_RE.test(t)
+				: TASK_RE.test(t);
+	const allHave = lines.every((l) => has(l.text));
+	let n = 1;
+	const changes = lines.map((l) => {
+		const { indent, body } = stripMarker(l.text);
+		let insert: string;
+		if (allHave) insert = indent + body;
+		else if (kind === "bullet") insert = `${indent}- ${body}`;
+		else if (kind === "ordered") insert = `${indent}${n++}. ${body}`;
+		else insert = `${indent}- [ ] ${body}`;
+		return { from: l.from, to: l.to, insert };
+	});
+	view.dispatch({ changes, userEvent: "input", scrollIntoView: true });
+	return true;
+}
+
+export function toggleBlockquote(view: EditorView): boolean {
+	const lines = selectedLines(view.state);
+	if (lines.length === 0) return false;
+	const allQuoted = lines.every((l) => QUOTE_RE.test(l.text));
+	const changes = lines.map((l) => {
+		if (allQuoted) {
+			const m = QUOTE_RE.exec(l.text);
+			return { from: l.from, to: l.to, insert: (m?.[1] ?? "") + l.text.slice(m?.[0].length ?? 0) };
+		}
+		const indent = /^(\s*)/.exec(l.text)?.[1] ?? "";
+		return { from: l.from, to: l.to, insert: `${indent}> ${l.text.slice(indent.length)}` };
+	});
+	view.dispatch({ changes, userEvent: "input", scrollIntoView: true });
+	return true;
+}
+
+/** Toggle [ ] / [x] on task lines; turn plain lines into unchecked tasks. */
+export function toggleTaskDone(view: EditorView): boolean {
+	const lines = selectedLines(view.state);
+	if (lines.length === 0) return false;
+	const changes = lines.map((l) => {
+		const m = TASK_RE.exec(l.text);
+		if (m) {
+			const done = m[3].toLowerCase() === "x";
+			const rest = l.text.slice(m[0].length);
+			return { from: l.from, to: l.to, insert: `${m[1]}${m[2]} [${done ? " " : "x"}] ${rest}` };
+		}
+		const { indent, body } = stripMarker(l.text);
+		return { from: l.from, to: l.to, insert: `${indent}- [ ] ${body}` };
+	});
+	view.dispatch({ changes, userEvent: "input", scrollIntoView: true });
+	return true;
+}
+
+/** [selection]() with the cursor in the parens; a selected URL becomes the target. */
+export function insertLink(view: EditorView): boolean {
+	const tr = view.state.changeByRange((range) => {
+		const sel = view.state.sliceDoc(range.from, range.to).trim();
+		if (/^https?:\/\/\S+$/.test(sel)) {
+			return {
+				changes: { from: range.from, to: range.to, insert: `[](${sel})` },
+				range: EditorSelection.cursor(range.from + 1),
+			};
+		}
+		return {
+			changes: { from: range.from, to: range.to, insert: `[${sel}]()` },
+			range: EditorSelection.cursor(range.from + sel.length + 3),
+		};
+	});
+	view.dispatch(tr, { userEvent: "input", scrollIntoView: true });
+	return true;
+}
+
+/** Wrap the selected lines in a ``` fence (or open an empty one). */
+export function insertCodeBlock(view: EditorView): boolean {
+	const { state } = view;
+	const sel = state.selection.main;
+	const first = state.doc.lineAt(sel.from);
+	const last = state.doc.lineAt(sel.to);
+	const body = state.sliceDoc(first.from, last.to);
+	view.dispatch({
+		changes: { from: first.from, to: last.to, insert: "```\n" + body + "\n```" },
+		selection: EditorSelection.cursor(first.from + 4 + body.length),
+		userEvent: "input",
+		scrollIntoView: true,
+	});
+	view.focus();
+	return true;
+}
 
 /* --- Tab / indent behavior --- */
 
