@@ -124,19 +124,19 @@ export function adjustHeading(view: EditorView, delta: number): boolean {
 	return setHeading(view, level);
 }
 
-// Mod+L/J/K/I are day and week navigation here, so the formatting
-// commands that collide with them live on Alt (or shifted) variants.
+// Formatting keys are identical to P.S. Notes (and iA Writer). DayJournal's
+// own calendar navigation is what moves aside, onto Alt+letter.
 const mdKeymap = [
 	{ key: "Mod-b", run: (v: EditorView) => toggleSurround(v, "**") },
-	{ key: "Mod-Shift-i", run: (v: EditorView) => toggleSurround(v, "*") },
+	{ key: "Mod-i", run: (v: EditorView) => toggleSurround(v, "*") },
 	{ key: "Mod-Alt-u", run: (v: EditorView) => toggleSurround(v, "~~") },
-	{ key: "Mod-Shift-k", run: insertLink },
+	{ key: "Mod-k", run: insertLink },
 	{ key: "Mod-/", run: (v: EditorView) => toggleSurroundWith(v, "<!-- ", " -->") },
-	{ key: "Mod-Alt-j", run: (v: EditorView) => toggleSurround(v, "`") },
-	{ key: "Mod-Alt-Shift-j", run: insertCodeBlock },
-	{ key: "Mod-Alt-l", run: (v: EditorView) => toggleList(v, "bullet") },
-	{ key: "Mod-Alt-Shift-l", run: (v: EditorView) => toggleList(v, "ordered") },
-	{ key: "Mod-Alt-t", run: (v: EditorView) => toggleList(v, "task") },
+	{ key: "Mod-j", run: (v: EditorView) => toggleSurround(v, "`") },
+	{ key: "Mod-Shift-j", run: insertCodeBlock },
+	{ key: "Mod-l", run: (v: EditorView) => toggleList(v, "bullet") },
+	{ key: "Mod-Shift-l", run: (v: EditorView) => toggleList(v, "ordered") },
+	{ key: "Mod-Alt-l", run: (v: EditorView) => toggleList(v, "task") },
 	{ key: "Mod-Alt-x", run: toggleTaskDone },
 	{ key: "Mod-Shift-.", run: toggleBlockquote },
 	{ key: "Mod->", run: toggleBlockquote },

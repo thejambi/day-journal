@@ -60,29 +60,39 @@
 			return;
 		}
 
+		// Calendar navigation lives on Alt+letter so the markdown formatting
+		// shortcuts can stay identical to P.S. Notes. Match on e.code: on
+		// macOS, Option+L reports e.key as "¬".
+		if (e.altKey && !modKey && !e.shiftKey) {
+			switch (e.code) {
+				case "KeyL":
+					e.preventDefault();
+					void navDays(1);
+					return;
+				case "KeyJ":
+					e.preventDefault();
+					void navDays(-1);
+					return;
+				case "KeyI":
+					e.preventDefault();
+					void navDays(-7);
+					return;
+				case "KeyK":
+					e.preventDefault();
+					void navDays(7);
+					return;
+				case "KeyT":
+					e.preventDefault();
+					void goToday();
+					return;
+				default:
+					return;
+			}
+		}
+
 		if (!modKey || e.shiftKey) return;
 
 		switch (key) {
-			case "l":
-				e.preventDefault();
-				void navDays(1);
-				break;
-			case "j":
-				e.preventDefault();
-				void navDays(-1);
-				break;
-			case "i":
-				e.preventDefault();
-				void navDays(-7);
-				break;
-			case "k":
-				e.preventDefault();
-				void navDays(7);
-				break;
-			case "t":
-				e.preventDefault();
-				void goToday();
-				break;
 			case "d":
 				e.preventDefault();
 				prependDateHeading();

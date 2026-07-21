@@ -33,10 +33,11 @@
 		}
 	}
 
+	const alt = isMac ? "⌥" : "Alt+";
 	const shortcutRows: [string, string][] = [
-		[`${mod}T`, "Go to today"],
-		[`${mod}L  /  ${mod}J`, "Next / previous day"],
-		[`${mod}K  /  ${mod}I`, "Jump a week forward / back"],
+		[`${alt}T`, "Go to today"],
+		[`${alt}L  /  ${alt}J`, "Next / previous day"],
+		[`${alt}K  /  ${alt}I`, "Jump a week forward / back"],
 		[`${mod}D`, "Start entry with the date"],
 		[`${mod}N`, "Insert a timestamped entry section"],
 		[`${mod}U`, "Unlock entry"],
@@ -45,14 +46,11 @@
 		["Tab / Shift+Tab", "Indent / unindent (list items indent whole bullet)"],
 		[`${mod}]  /  ${mod}[`, "Indent / unindent line"],
 		["Enter (in a list)", "Continue the list; Enter on an empty item ends it"],
-		[
-			`${mod}B  /  ${isMac ? "⌘⇧I" : "Ctrl+Shift+I"}  /  ${isMac ? "⌥⌘U" : "Ctrl+Alt+U"}`,
-			"Bold / italics / strikethrough",
-		],
-		[isMac ? "⌘⇧K" : "Ctrl+Shift+K", "Add link"],
-		[`${isMac ? "⌥⌘J" : "Ctrl+Alt+J"}  /  ${isMac ? "⌥⇧⌘J" : "Ctrl+Alt+Shift+J"}`, "Inline code / code block"],
-		[`${isMac ? "⌥⌘L" : "Ctrl+Alt+L"}  /  ${isMac ? "⌥⇧⌘L" : "Ctrl+Alt+Shift+L"}`, "Bullet / ordered list"],
-		[`${isMac ? "⌥⌘T" : "Ctrl+Alt+T"}  /  ${isMac ? "⌥⌘X" : "Ctrl+Alt+X"}`, "Task list / toggle task done"],
+		[`${mod}B  /  ${mod}I  /  ${isMac ? "⌥⌘U" : "Ctrl+Alt+U"}`, "Bold / italics / strikethrough"],
+		[`${mod}K`, "Add link"],
+		[`${mod}J  /  ${isMac ? "⌘⇧J" : "Ctrl+Shift+J"}`, "Inline code / code block"],
+		[`${mod}L  /  ${isMac ? "⌘⇧L" : "Ctrl+Shift+L"}`, "Bullet list / ordered list"],
+		[`${isMac ? "⌥⌘L" : "Ctrl+Alt+L"}  /  ${isMac ? "⌥⌘X" : "Ctrl+Alt+X"}`, "Task list / toggle task done"],
 		[isMac ? "⌘>" : "Ctrl+>", "Blockquote"],
 		[`${mod}1–6  /  ${mod}\\`, "Set / increase heading level"],
 		[`${mod}/`, "Toggle HTML comment around selection"],
