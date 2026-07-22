@@ -27,7 +27,9 @@ const mdHighlight = HighlightStyle.define([
 	{ tag: tags.monospace, fontFamily: "var(--font-mono)", fontSize: "0.9em" },
 	{ tag: tags.quote, color: "var(--fg-dim)", fontStyle: "italic" },
 	{ tag: tags.link, color: "var(--accent)" },
-	{ tag: tags.url, color: "var(--fg-faint)" },
+	// Same accent as .cm-clickable-url so URLs never flip color depending
+	// on how the markdown parser tokenized them in a given context
+	{ tag: tags.url, color: "var(--accent)" },
 	{ tag: tags.processingInstruction, color: "var(--fg-faint)" },
 	{ tag: tags.contentSeparator, color: "var(--fg-faint)" },
 ]);
@@ -171,12 +173,40 @@ function selectedLines(state: EditorState) {
 	return lines;
 }
 
-/** Split a line into its indent and its content, dropping any list marker. */
-function stripMarker(text: string): { indent: string; body: string } {
-	const m = TASK_RE.exec(text) ?? BULLET_RE.exec(text) ?? ORDERED_RE.exec(text);
-	if (m) return { indent: m[1], body: text.slice(m[0].length) };
-	const indent = /^(\s*)/.exec(text)?.[1] ?? "";
-	return { indent, body: text.slice(indent.length) };
+interface PrefixChange {
+	from: number;
+	to: number;
+	insert: string;
+}
+
+/** Dispatch per-line prefix edits with intuitive cursor mapping: a cursor
+    inside a changed prefix lands right after the new prefix (so toggling a
+    bullet on an empty line leaves you ready to type), and a cursor in the
+    body keeps its place in the text. */
+function dispatchPrefixChanges(view: EditorView, changes: PrefixChange[]): boolean {
+	if (changes.length === 0) return false;
+	const mapPos = (pos: number): number => {
+		let delta = 0;
+		for (const c of changes) {
+			if (pos < c.from) break;
+			if (pos <= c.to) return c.from + delta + c.insert.length;
+			delta += c.insert.length - (c.to - c.from);
+		}
+		return pos + delta;
+	};
+	const sel = EditorSelection.create(
+		view.state.selection.ranges.map((r) => EditorSelection.range(mapPos(r.anchor), mapPos(r.head))),
+		view.state.selection.mainIndex,
+	);
+	view.dispatch({ changes, selection: sel, userEvent: "input", scrollIntoView: true });
+	return true;
+}
+
+/** The marker-prefix region of a line: [after indent, after marker). */
+function markerRegion(l: { from: number; text: string }): { from: number; to: number; indent: string } {
+	const m = TASK_RE.exec(l.text) ?? BULLET_RE.exec(l.text) ?? ORDERED_RE.exec(l.text);
+	const indent = m ? m[1] : (/^\s*/.exec(l.text)?.[0] ?? "");
+	return { from: l.from + indent.length, to: l.from + (m ? m[0].length : indent.length), indent };
 }
 
 export function toggleList(view: EditorView, kind: "bullet" | "ordered" | "task"): boolean {
@@ -191,16 +221,15 @@ export function toggleList(view: EditorView, kind: "bullet" | "ordered" | "task"
 	const allHave = lines.every((l) => has(l.text));
 	let n = 1;
 	const changes = lines.map((l) => {
-		const { indent, body } = stripMarker(l.text);
-		let insert: string;
-		if (allHave) insert = indent + body;
-		else if (kind === "bullet") insert = `${indent}- ${body}`;
-		else if (kind === "ordered") insert = `${indent}${n++}. ${body}`;
-		else insert = `${indent}- [ ] ${body}`;
-		return { from: l.from, to: l.to, insert };
+		const region = markerRegion(l);
+		let marker: string;
+		if (allHave) marker = "";
+		else if (kind === "bullet") marker = "- ";
+		else if (kind === "ordered") marker = `${n++}. `;
+		else marker = "- [ ] ";
+		return { from: region.from, to: region.to, insert: marker };
 	});
-	view.dispatch({ changes, userEvent: "input", scrollIntoView: true });
-	return true;
+	return dispatchPrefixChanges(view, changes);
 }
 
 export function toggleBlockquote(view: EditorView): boolean {
@@ -208,15 +237,13 @@ export function toggleBlockquote(view: EditorView): boolean {
 	if (lines.length === 0) return false;
 	const allQuoted = lines.every((l) => QUOTE_RE.test(l.text));
 	const changes = lines.map((l) => {
-		if (allQuoted) {
-			const m = QUOTE_RE.exec(l.text);
-			return { from: l.from, to: l.to, insert: (m?.[1] ?? "") + l.text.slice(m?.[0].length ?? 0) };
-		}
-		const indent = /^(\s*)/.exec(l.text)?.[1] ?? "";
-		return { from: l.from, to: l.to, insert: `${indent}> ${l.text.slice(indent.length)}` };
+		const q = QUOTE_RE.exec(l.text);
+		const indent = q ? q[1] : (/^\s*/.exec(l.text)?.[0] ?? "");
+		const from = l.from + indent.length;
+		if (allQuoted) return { from, to: l.from + (q?.[0].length ?? indent.length), insert: "" };
+		return { from, to: from, insert: "> " };
 	});
-	view.dispatch({ changes, userEvent: "input", scrollIntoView: true });
-	return true;
+	return dispatchPrefixChanges(view, changes);
 }
 
 /** Toggle [ ] / [x] on task lines; turn plain lines into unchecked tasks. */
@@ -226,15 +253,15 @@ export function toggleTaskDone(view: EditorView): boolean {
 	const changes = lines.map((l) => {
 		const m = TASK_RE.exec(l.text);
 		if (m) {
+			// Flip just the checkbox character; nothing else moves
 			const done = m[3].toLowerCase() === "x";
-			const rest = l.text.slice(m[0].length);
-			return { from: l.from, to: l.to, insert: `${m[1]}${m[2]} [${done ? " " : "x"}] ${rest}` };
+			const boxAt = l.from + l.text.indexOf("[", m[1].length + m[2].length) + 1;
+			return { from: boxAt, to: boxAt + 1, insert: done ? " " : "x" };
 		}
-		const { indent, body } = stripMarker(l.text);
-		return { from: l.from, to: l.to, insert: `${indent}- [ ] ${body}` };
+		const region = markerRegion(l);
+		return { from: region.from, to: region.to, insert: "- [ ] " };
 	});
-	view.dispatch({ changes, userEvent: "input", scrollIntoView: true });
-	return true;
+	return dispatchPrefixChanges(view, changes);
 }
 
 /** [selection]() with the cursor in the parens; a selected URL becomes the target. */
