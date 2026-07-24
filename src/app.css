@@ -1,5 +1,17 @@
 /* Global palette and base styles shared by all components */
 
+/* Tell the engine which scheme is active so native chrome (scrollbars,
+   selects, checkboxes) matches the theme instead of defaulting to light */
+:root {
+	color-scheme: light dark;
+}
+:root[data-theme="light"] {
+	color-scheme: light;
+}
+:root[data-theme="dark"] {
+	color-scheme: dark;
+}
+
 :root {
 	--bg: #fdfdfc;
 	--bg-panel: #f4f3f1;
