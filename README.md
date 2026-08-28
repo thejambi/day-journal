@@ -10,7 +10,8 @@ Built with [Tauri 2](https://tauri.app), Svelte 5, and CodeMirror 6. The install
 
 - **One entry per day.** Pick a day on the calendar, write. Entries save automatically ~0.8s after you pause typing, and always on day switch, window blur, close, and quit. Saves are atomic (temp file + rename), so a crash can't truncate an entry.
 - **The calendar shows your history.** Days with entries get a dot; today is outlined. Clearing an entry's text deletes its file and prunes empty month/year folders.
-- **Past entries lock** (optional, on by default) so you don't accidentally rewrite history — one click (or `Cmd/Ctrl+U`) unlocks.
+- **Past entries lock** (optional, on by default) so you don't accidentally rewrite history — days with no entry lock too, so a stray keystroke can't backdate one. One click (or `Cmd/Ctrl+U`) unlocks a day for deliberate backfilling.
+- **Daily template**: set text that today's entry starts from when nothing is written yet, with `{date}`, `{longdate}`, `{weekday}`, `{month}` and `{time}` placeholders. Days you open but never write in create no file — the template is a starting point, not an entry.
 - **Timestamped sections**: `Cmd/Ctrl+N` inserts `3:45pm | ` so one day can hold many moments. `Cmd/Ctrl+D` starts the entry with its date heading.
 - **Fast keyboard date travel** (`Ctrl` on macOS, `Alt` on Windows/Linux): `T` today, `L`/`J` next/previous day, `K`/`I` a week forward/back.
 - **Multiple journals** via the Journals menu (work journal, personal journal, …).
