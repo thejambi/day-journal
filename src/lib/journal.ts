@@ -60,6 +60,20 @@ export function newSectionText(): string {
 	return `\n\n${h12}:${pad2(now.getMinutes())}${ampm} |  `;
 }
 
+/** Expand template placeholders for a given day. */
+export function expandTemplate(template: string, date: EntryDate): string {
+	const d = new Date(date.y, date.m - 1, date.d);
+	const now = new Date();
+	const h12 = now.getHours() % 12 || 12;
+	const time = `${h12}:${pad2(now.getMinutes())}${now.getHours() < 12 ? "am" : "pm"}`;
+	return template
+		.replace(/\{date\}/g, `${date.y}-${pad2(date.m)}-${pad2(date.d)}`)
+		.replace(/\{longdate\}/g, dateHeading(date))
+		.replace(/\{weekday\}/g, d.toLocaleDateString("en-US", { weekday: "long" }))
+		.replace(/\{month\}/g, d.toLocaleDateString("en-US", { month: "long" }))
+		.replace(/\{time\}/g, time);
+}
+
 export async function readEntry(root: string, date: EntryDate): Promise<string> {
 	const { filePath } = entryPaths(root, date);
 	try {

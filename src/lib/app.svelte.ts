@@ -24,6 +24,7 @@ import {
 	readEntry,
 	saveEntry,
 	daysWithEntries,
+	expandTemplate,
 	listDayImages,
 	nextImagePath,
 	mimeFor,
@@ -54,6 +55,7 @@ export const app = $state({
 		lastDir: null,
 		fontSize: DEFAULT_FONT_SIZE,
 		lockPastEntries: true,
+		dailyTemplate: "",
 		showWordCount: true,
 		paneWidth: 280,
 		theme: "system",
@@ -68,7 +70,7 @@ export const app = $state({
 	wordCount: 0,
 	openMenuShown: false,
 	settingsMenuShown: false,
-	modal: null as "shortcuts" | "about" | "archive" | null,
+	modal: null as "shortcuts" | "about" | "archive" | "template" | null,
 	dayImages: [] as { name: string; path: string; url: string }[],
 	dropHover: false,
 });
@@ -81,6 +83,9 @@ let isOpening = false;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let unwatch: UnwatchFn | null = null;
 let savedDate: EntryDate = { ...t }; // the date the editor content belongs to
+// Set when a fileless day was prefilled with the daily template and the
+// user hasn't touched it: such a day must never be written to disk.
+let pristineTemplate: string | null = null;
 
 export function focusEditor(): void {
 	view?.focus();
@@ -101,8 +106,15 @@ function onDocChanged(): void {
 
 async function saveNow(): Promise<void> {
 	if (!app.journalDir || !dirty) return;
-	dirty = false;
 	const text = view.state.doc.toString();
+	// An untouched template is not an entry: days the user opened but
+	// never wrote in must not get a file.
+	if (pristineTemplate !== null && text === pristineTemplate) {
+		dirty = false;
+		return;
+	}
+	dirty = false;
+	pristineTemplate = null; // the day is now genuinely written in
 	const date = savedDate;
 	try {
 		await saveEntry(app.journalDir, date, text);
@@ -140,9 +152,18 @@ export async function loadEntry(date: EntryDate): Promise<void> {
 	app.selected = { ...date };
 	app.calYear = date.y;
 	app.calMonth = date.m;
-	setDocument(view, extensions, text);
-	app.wordCount = countWords(text);
-	app.locked = app.settings.lockPastEntries && isPast(date) && text.trim() !== "";
+	const locked = app.settings.lockPastEntries && isPast(date) && text.trim() !== "";
+	// A day with no entry yet starts from the daily template (if set).
+	// It stays unsaved until the user actually types something.
+	let docText = text;
+	pristineTemplate = null;
+	if (text === "" && !locked && app.settings.dailyTemplate.trim() !== "") {
+		docText = expandTemplate(app.settings.dailyTemplate, date);
+		pristineTemplate = docText;
+	}
+	setDocument(view, extensions, docText);
+	app.wordCount = countWords(docText);
+	app.locked = locked;
 	setReadOnly(view, app.locked);
 	dirty = false;
 	isOpening = false;
@@ -237,6 +258,13 @@ export async function showMonth(y: number, m: number): Promise<void> {
 	await refreshMarks();
 }
 
+/** Save the daily template; refresh the open day if it's showing the old one. */
+export function setDailyTemplate(text: string): void {
+	app.settings.dailyTemplate = text;
+	persist("dailyTemplate", text);
+	if (pristineTemplate !== null) void loadEntry(app.selected);
+}
+
 export function unlockEntry(): void {
 	app.locked = false;
 	setReadOnly(view, false);
@@ -320,6 +348,8 @@ async function onExternalChange(): Promise<void> {
 	const text = await readEntry(app.journalDir, date);
 	// Re-check after the read: never clobber live keystrokes or a switched day
 	if (!sameDate(date, savedDate) || dirty || saveTimer) return;
+	// The day still has no file on disk; keep showing the template
+	if (text === "" && pristineTemplate !== null) return;
 	if (text !== view.state.doc.toString()) {
 		const sel = Math.min(view.state.selection.main.head, text.length);
 		isOpening = true;

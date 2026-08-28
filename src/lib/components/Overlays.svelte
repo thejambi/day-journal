@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { revealItemInDir, openPath } from "@tauri-apps/plugin-opener";
-	import { app, chooseFolder, isMac, modKeyLabel as mod } from "$lib/app.svelte";
+	import { app, chooseFolder, setDailyTemplate, isMac, modKeyLabel as mod } from "$lib/app.svelte";
 	import { journalYears, createArchive, type ArchiveFormat, type ArchiveResult } from "$lib/archive";
 
 	let archiveFormat = $state<ArchiveFormat>("html");
@@ -9,6 +9,12 @@
 	let archiveBusy = $state(false);
 	let archiveError = $state("");
 	let archiveResult = $state<ArchiveResult | null>(null);
+	let templateText = $state("");
+
+	// Load the saved template each time the dialog opens
+	$effect(() => {
+		if (app.modal === "template") templateText = app.settings.dailyTemplate;
+	});
 
 	// Load the year picker each time the archive dialog opens
 	$effect(() => {
@@ -79,7 +85,41 @@
 		}}
 	>
 		<div class="modal">
-			{#if app.modal === "archive"}
+			{#if app.modal === "template"}
+				<h2>Daily Template</h2>
+				<p class="dim">
+					New days start with this text. It's only a starting point — days you open but never write in stay
+					empty, and no file is created for them.
+				</p>
+				<textarea
+					class="tmpl-input"
+					rows="10"
+					placeholder={"## {weekday}\n\nGrateful for:\n\nToday:\n"}
+					bind:value={templateText}
+				></textarea>
+				<p class="tmpl-help">
+					Placeholders: <code>{"{date}"}</code> <code>{"{longdate}"}</code> <code>{"{weekday}"}</code>
+					<code>{"{month}"}</code> <code>{"{time}"}</code>
+				</p>
+				<div class="arch-actions">
+					<button
+						class="big-btn small"
+						onclick={() => {
+							setDailyTemplate(templateText);
+							app.modal = null;
+						}}>Save Template</button
+					>
+					{#if app.settings.dailyTemplate !== ""}
+						<button
+							class="tb-btn"
+							onclick={() => {
+								setDailyTemplate("");
+								app.modal = null;
+							}}>Clear</button
+						>
+					{/if}
+				</div>
+			{:else if app.modal === "archive"}
 				<h2>Create Journal Archive</h2>
 				<p class="dim">
 					Flatten your whole journal into one printable, backup-friendly file, saved into the journal's
@@ -255,6 +295,34 @@
 		display: flex;
 		gap: 8px;
 		margin: 12px 0 6px;
+	}
+	.tmpl-input {
+		width: 100%;
+		box-sizing: border-box;
+		font-family: var(--font-mono);
+		font-size: 13px;
+		line-height: 1.5;
+		color: var(--fg);
+		background: var(--bg-panel);
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		padding: 10px 12px;
+		outline: none;
+		resize: vertical;
+	}
+	.tmpl-input:focus {
+		border-color: var(--accent);
+	}
+	.tmpl-help {
+		font-size: 11px;
+		color: var(--fg-dim);
+		margin: 8px 0 0;
+	}
+	.tmpl-help code {
+		font-family: var(--font-mono);
+		background: var(--bg-panel);
+		border-radius: 3px;
+		padding: 0 4px;
 	}
 	.big-btn.small {
 		font-size: 13px;

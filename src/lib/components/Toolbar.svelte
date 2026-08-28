@@ -98,6 +98,13 @@
 						}}>{app.settings.lockPastEntries ? "✓" : " "} Lock past entries</button
 					>
 					<button
+						class="menu-item"
+						onclick={() => {
+							closeMenus();
+							app.modal = "template";
+						}}>Daily template…</button
+					>
+					<button
 						class="menu-item check"
 						onclick={() => {
 							app.settings.showWordCount = !app.settings.showWordCount;

@@ -5,6 +5,7 @@ export interface Settings {
 	lastDir: string | null;
 	fontSize: number;
 	lockPastEntries: boolean;
+	dailyTemplate: string;
 	showWordCount: boolean;
 	paneWidth: number;
 	theme: "system" | "light" | "dark";
@@ -17,6 +18,7 @@ const defaults: Settings = {
 	lastDir: null,
 	fontSize: DEFAULT_FONT_SIZE,
 	lockPastEntries: true,
+	dailyTemplate: "",
 	showWordCount: true,
 	paneWidth: 280,
 	theme: "system",
