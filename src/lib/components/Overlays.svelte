@@ -39,11 +39,11 @@
 		}
 	}
 
-	const alt = isMac ? "⌥" : "Alt+";
+	const nav = isMac ? "⌃" : "Alt+";
 	const shortcutRows: [string, string][] = [
-		[`${alt}T`, "Go to today"],
-		[`${alt}L  /  ${alt}J`, "Next / previous day"],
-		[`${alt}K  /  ${alt}I`, "Jump a week forward / back"],
+		[`${nav}T`, "Go to today"],
+		[`${nav}L  /  ${nav}J`, "Next / previous day"],
+		[`${nav}K  /  ${nav}I`, "Jump a week forward / back"],
 		[`${mod}D`, "Start entry with the date"],
 		[`${mod}N`, "Insert a timestamped entry section"],
 		[`${mod}U`, "Unlock entry"],

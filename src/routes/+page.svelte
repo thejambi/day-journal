@@ -22,15 +22,17 @@
 		resetFont,
 		showEditContextMenu,
 	} from "$lib/app.svelte";
-	import { armDeadKeyGuard } from "$lib/editor";
 
 	let editorParent: HTMLElement;
 
 	onMount(() => {
 		const cleanupApp = initApp(editorParent);
-		// Alt+letter calendar navigation is handled in the capture phase, before
-		// the editor or the OS input method see it: on macOS Option+I is a dead
-		// key that would otherwise compose a "ˆ" into the entry.
+		// Calendar navigation: Control+letter on macOS, Alt+letter elsewhere.
+		// Option+letter is macOS's text-input layer (Option+I is a dead key that
+		// composes accents), so Control is the only single modifier that can
+		// never produce a character; on Windows and Linux, Ctrl belongs to the
+		// formatting shortcuts, and Alt is the free one. Handled in the capture
+		// phase so the editor never sees these keys.
 		const navKeys: Record<string, () => void> = {
 			KeyL: () => void navDays(1),
 			KeyJ: () => void navDays(-1),
@@ -39,14 +41,14 @@
 			KeyT: () => void goToday(),
 		};
 		const navCapture = (e: KeyboardEvent) => {
-			if (!e.altKey || e.shiftKey || e.metaKey || e.ctrlKey) return;
+			const navModifier = isMac
+				? e.ctrlKey && !e.altKey && !e.metaKey
+				: e.altKey && !e.ctrlKey && !e.metaKey;
+			if (!navModifier || e.shiftKey) return;
 			const run = navKeys[e.code];
 			if (!run) return;
 			e.preventDefault();
 			e.stopPropagation();
-			// Only when the OS says a dead key fired (Option+I on US layouts),
-			// so an ordinary backtick typed later is never swallowed.
-			if (e.key === "Dead" || e.code === "KeyI") armDeadKeyGuard();
 			run();
 		};
 		window.addEventListener("keydown", navCapture, true);

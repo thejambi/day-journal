@@ -12,7 +12,7 @@ Built with [Tauri 2](https://tauri.app), Svelte 5, and CodeMirror 6. The install
 - **The calendar shows your history.** Days with entries get a dot; today is outlined. Clearing an entry's text deletes its file and prunes empty month/year folders.
 - **Past entries lock** (optional, on by default) so you don't accidentally rewrite history — one click (or `Cmd/Ctrl+U`) unlocks.
 - **Timestamped sections**: `Cmd/Ctrl+N` inserts `3:45pm | ` so one day can hold many moments. `Cmd/Ctrl+D` starts the entry with its date heading.
-- **Fast keyboard date travel**: `Cmd/Ctrl+T` today, `L`/`J` next/previous day, `K`/`I` a week forward/back.
+- **Fast keyboard date travel** (`Ctrl` on macOS, `Alt` on Windows/Linux): `T` today, `L`/`J` next/previous day, `K`/`I` a week forward/back.
 - **Multiple journals** via the Journals menu (work journal, personal journal, …).
 - **Journal archive export**: flatten everything (or one year) into a single styled, printable HTML document — print to PDF from your browser — or a plain text backup file, saved into the journal's `Archive/` folder.
 - **Plays nicely with sync.** The journal folder is watched; entries arriving from another device update the calendar and reload the open day if you have no unsaved changes.
