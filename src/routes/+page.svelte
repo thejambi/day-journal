@@ -209,6 +209,10 @@
 	.editor-wrap.locked {
 		background: var(--bg-panel);
 	}
+	/* "Write about your day…" would be a lie in a read-only entry */
+	.editor-wrap.locked :global(.cm-placeholder) {
+		display: none;
+	}
 
 	.drop-hint {
 		position: fixed;

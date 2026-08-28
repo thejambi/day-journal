@@ -14,6 +14,7 @@
 		revealJournal,
 		closeMenus,
 		unlockEntry,
+		setLockPastEntries,
 		bumpFont,
 		resetFont,
 	} from "$lib/app.svelte";
@@ -92,10 +93,8 @@
 				<div class="menu menu-right">
 					<button
 						class="menu-item check"
-						onclick={() => {
-							app.settings.lockPastEntries = !app.settings.lockPastEntries;
-							persist("lockPastEntries", app.settings.lockPastEntries);
-						}}>{app.settings.lockPastEntries ? "✓" : " "} Lock past entries</button
+						onclick={() => setLockPastEntries(!app.settings.lockPastEntries)}
+						>{app.settings.lockPastEntries ? "✓" : " "} Lock past entries</button
 					>
 					<button
 						class="menu-item"

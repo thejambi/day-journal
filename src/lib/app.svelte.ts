@@ -155,7 +155,9 @@ export async function loadEntry(date: EntryDate): Promise<void> {
 	app.selected = { ...date };
 	app.calYear = date.y;
 	app.calMonth = date.m;
-	const locked = app.settings.lockPastEntries && isPast(date) && text.trim() !== "";
+	// Past days lock whole, written or not: an empty past day is a day you
+	// didn't journal, not an invitation to backfill it by accident.
+	const locked = app.settings.lockPastEntries && isPast(date);
 	// Today starts from the daily template when it has nothing written
 	// yet (no file, or a file that's only whitespace). Past and future
 	// days are never prefilled — a template there invites backdating an
@@ -274,6 +276,17 @@ export function setDailyTemplate(text: string): void {
 	app.settings.dailyTemplate = text;
 	persist("dailyTemplate", text);
 	if (pristineTemplate !== null) void loadEntry(app.selected);
+}
+
+/** Toggle the setting and re-evaluate the day currently open. */
+export function setLockPastEntries(on: boolean): void {
+	app.settings.lockPastEntries = on;
+	persist("lockPastEntries", on);
+	const shouldLock = on && isPast(app.selected);
+	if (app.locked !== shouldLock) {
+		app.locked = shouldLock;
+		setReadOnly(view, shouldLock);
+	}
 }
 
 export function unlockEntry(): void {
