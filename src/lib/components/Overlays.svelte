@@ -88,8 +88,8 @@
 			{#if app.modal === "template"}
 				<h2>Daily Template</h2>
 				<p class="dim">
-					New days start with this text. It's only a starting point — days you open but never write in stay
-					empty, and no file is created for them.
+					Today's entry starts with this text when nothing is written for the day yet. It's only a starting
+					point — if you never write, no file is created. Past days are never prefilled.
 				</p>
 				<textarea
 					class="tmpl-input"

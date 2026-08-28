@@ -153,11 +153,19 @@ export async function loadEntry(date: EntryDate): Promise<void> {
 	app.calYear = date.y;
 	app.calMonth = date.m;
 	const locked = app.settings.lockPastEntries && isPast(date) && text.trim() !== "";
-	// A day with no entry yet starts from the daily template (if set).
-	// It stays unsaved until the user actually types something.
+	// Today starts from the daily template when it has nothing written
+	// yet (no file, or a file that's only whitespace). Past and future
+	// days are never prefilled — a template there invites backdating an
+	// entry with one stray keystroke. It stays unsaved until the user
+	// actually types something.
 	let docText = text;
 	pristineTemplate = null;
-	if (text === "" && !locked && app.settings.dailyTemplate.trim() !== "") {
+	if (
+		sameDate(date, today()) &&
+		text.trim() === "" &&
+		!locked &&
+		app.settings.dailyTemplate.trim() !== ""
+	) {
 		docText = expandTemplate(app.settings.dailyTemplate, date);
 		pristineTemplate = docText;
 	}
