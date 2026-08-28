@@ -25,7 +25,32 @@
 
 	let editorParent: HTMLElement;
 
-	onMount(() => initApp(editorParent));
+	onMount(() => {
+		const cleanupApp = initApp(editorParent);
+		// Alt+letter calendar navigation is handled in the capture phase, before
+		// the editor or the OS input method see it: on macOS Option+I is a dead
+		// key that would otherwise compose a "ˆ" into the entry.
+		const navKeys: Record<string, () => void> = {
+			KeyL: () => void navDays(1),
+			KeyJ: () => void navDays(-1),
+			KeyI: () => void navDays(-7),
+			KeyK: () => void navDays(7),
+			KeyT: () => void goToday(),
+		};
+		const navCapture = (e: KeyboardEvent) => {
+			if (!e.altKey || e.shiftKey || e.metaKey || e.ctrlKey) return;
+			const run = navKeys[e.code];
+			if (!run) return;
+			e.preventDefault();
+			e.stopPropagation();
+			run();
+		};
+		window.addEventListener("keydown", navCapture, true);
+		return () => {
+			window.removeEventListener("keydown", navCapture, true);
+			cleanupApp();
+		};
+	});
 
 	// Apply the theme choice; "system" defers to prefers-color-scheme
 	$effect(() => {
@@ -58,36 +83,6 @@
 			else if (app.openMenuShown || app.settingsMenuShown) closeMenus();
 			e.preventDefault();
 			return;
-		}
-
-		// Calendar navigation lives on Alt+letter so the markdown formatting
-		// shortcuts can stay identical to P.S. Notes. Match on e.code: on
-		// macOS, Option+L reports e.key as "¬".
-		if (e.altKey && !modKey && !e.shiftKey) {
-			switch (e.code) {
-				case "KeyL":
-					e.preventDefault();
-					void navDays(1);
-					return;
-				case "KeyJ":
-					e.preventDefault();
-					void navDays(-1);
-					return;
-				case "KeyI":
-					e.preventDefault();
-					void navDays(-7);
-					return;
-				case "KeyK":
-					e.preventDefault();
-					void navDays(7);
-					return;
-				case "KeyT":
-					e.preventDefault();
-					void goToday();
-					return;
-				default:
-					return;
-			}
 		}
 
 		if (!modKey || e.shiftKey) return;

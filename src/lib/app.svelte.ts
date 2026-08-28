@@ -145,8 +145,11 @@ export async function refreshMarks(): Promise<void> {
 
 export async function loadEntry(date: EntryDate): Promise<void> {
 	if (!app.journalDir) return;
-	await flushSave();
+	// Set before any await: a keystroke landing mid-switch (notably a
+	// macOS Option dead-key composition from the nav shortcuts) must not
+	// dirty the day being left behind.
 	isOpening = true;
+	await flushSave();
 	const text = await readEntry(app.journalDir, date);
 	savedDate = { ...date };
 	app.selected = { ...date };
