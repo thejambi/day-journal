@@ -402,6 +402,34 @@ const urlClickHandler = EditorView.domEventHandlers({
 	},
 });
 
+/* --- macOS dead-key guard ---
+   Option+I (week-back navigation) is a macOS dead key: the input method
+   starts an accent composition that preventDefault cannot stop, and it
+   commits a lone "ˆ" into the entry on the next keypress. Everything that
+   reaches the document goes through a transaction, so that is where we
+   catch it: once armed by a navigation shortcut, the next change that is
+   nothing but a bare diacritic is dropped. */
+
+const DEAD_CHARS = new Set(["ˆ", "´", "¨", "˜", "`", "^", "\u0300", "\u0301", "\u0302", "\u0303", "\u0308"]);
+let deadKeyArmed = false;
+
+/** Called when a nav shortcut fires: discard the diacritic it may spawn. */
+export function armDeadKeyGuard(): void {
+	deadKeyArmed = true;
+}
+
+const deadKeyFilter = EditorState.transactionFilter.of((tr) => {
+	if (!tr.docChanged || !deadKeyArmed) return tr;
+	let changes = 0;
+	let onlyDiacritic = true;
+	tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
+		changes++;
+		if (toA !== fromA || !DEAD_CHARS.has(inserted.toString())) onlyDiacritic = false;
+	});
+	deadKeyArmed = false;
+	return changes > 0 && onlyDiacritic ? [] : tr;
+});
+
 const readOnlyCompartment = new Compartment();
 
 export function buildExtensions(onDocChanged: () => void): Extension[] {
@@ -412,6 +440,7 @@ export function buildExtensions(onDocChanged: () => void): Extension[] {
 		EditorView.lineWrapping,
 		cmTheme,
 		indentUnit.of("\t"),
+		deadKeyFilter,
 		urlHighlighter,
 		modKeyCursor,
 		urlClickHandler,

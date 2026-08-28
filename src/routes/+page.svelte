@@ -22,6 +22,7 @@
 		resetFont,
 		showEditContextMenu,
 	} from "$lib/app.svelte";
+	import { armDeadKeyGuard } from "$lib/editor";
 
 	let editorParent: HTMLElement;
 
@@ -43,6 +44,9 @@
 			if (!run) return;
 			e.preventDefault();
 			e.stopPropagation();
+			// Only when the OS says a dead key fired (Option+I on US layouts),
+			// so an ordinary backtick typed later is never swallowed.
+			if (e.key === "Dead" || e.code === "KeyI") armDeadKeyGuard();
 			run();
 		};
 		window.addEventListener("keydown", navCapture, true);
