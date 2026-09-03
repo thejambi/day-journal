@@ -86,6 +86,20 @@ let savedDate: EntryDate = { ...t }; // the date the editor content belongs to
 // Set when a fileless day was prefilled with the daily template and the
 // user hasn't touched it: such a day must never be written to disk.
 let pristineTemplate: string | null = null;
+// Freezes each day's template expansion for the session, keyed by date +
+// template text: without this, a placeholder like {time} re-ticks to a
+// new value on every revisit, so the preview (and the pristine-match
+// check) never look the same twice.
+const templatePreviewCache = new Map<string, string>();
+function cachedExpandTemplate(template: string, date: EntryDate): string {
+	const key = `${date.y}-${date.m}-${date.d}|${template}`;
+	let expanded = templatePreviewCache.get(key);
+	if (expanded === undefined) {
+		expanded = expandTemplate(template, date);
+		templatePreviewCache.set(key, expanded);
+	}
+	return expanded;
+}
 
 export function focusEditor(): void {
 	view?.focus();
@@ -171,7 +185,7 @@ export async function loadEntry(date: EntryDate): Promise<void> {
 		!locked &&
 		app.settings.dailyTemplate.trim() !== ""
 	) {
-		docText = expandTemplate(app.settings.dailyTemplate, date);
+		docText = cachedExpandTemplate(app.settings.dailyTemplate, date);
 		pristineTemplate = docText;
 	}
 	setDocument(view, extensions, docText);
